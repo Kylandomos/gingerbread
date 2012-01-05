@@ -46,7 +46,7 @@
 	 * preserved from get_irqnr_and_base above
 	 */
 	test_for_ipi r0, r6, r5, lr
-	movne	r0, sp
+	movne	r1, sp
 	adrne	lr, BSYM(1b)
 	bne	do_IPI
 
@@ -509,7 +509,7 @@ __und_usr:
 	blo	__und_usr_unknown
 3:	ldrht	r0, [r4]
 	add	r2, r2, #2			@ r2 is PC + 2, make it PC + 4
-	orr	r0, r0, r5, lsl #16
+	orr    	r0, r0, r5, lsl #16
 #else
 	b	__und_usr_unknown
 #endif
@@ -740,12 +740,15 @@ ENTRY(__switch_to)
 	ldr	r6, [r2, #TI_CPU_DOMAIN]
 #endif
 #if defined(CONFIG_HAS_TLS_REG)
-	mcr	p15, 0, r3, c13, c0, 3		@ set TLS register
-//#elif !defined(CONFIG_TLS_REG_EMUL)
+#if defined(CONFIG_TEGRA_ERRATA_657451)
+	and	r4, r3, #(1<<20)
+	orr	r3, r3, r4, lsr #20
 #endif
+	mcr	p15, 0, r3, c13, c0, 3		@ set TLS register
+#elif !defined(CONFIG_TLS_REG_EMUL)
 	mov	r4, #0xffff0fff
 	str	r3, [r4, #-15]			@ TLS val at 0xffff0ff0
-//#endif
+#endif
 #ifdef CONFIG_MMU
 	mcr	p15, 0, r6, c3, c0, 0		@ Set domain register
 #endif
@@ -1017,10 +1020,18 @@ __kuser_get_tls:				@ 0xffff0fe0
 	ldr	r0, [pc, #(16 - 8)]		@ TLS stored at 0xffff0ff0
 #else
 	mrc	p15, 0, r0, c13, c0, 3		@ read TLS register
+#if defined(CONFIG_TEGRA_ERRATA_657451)
+	bfi	r0, r0, #20, #1
+	bic	r0, r0, #1
+#endif
 #endif
 	usr_ret	lr
 
+#if defined(CONFIG_TEGRA_ERRATA_657451)
+	.rep	3
+#else
 	.rep	5
+#endif
 	.word	0			@ pad up to __kuser_helper_version
 	.endr
 

@@ -83,12 +83,52 @@ static int __init hlt_setup(char *__unused)
 __setup("nohlt", nohlt_setup);
 __setup("hlt", hlt_setup);
 
+extern void write_cmd_reserved_buffer(unsigned char *buf, size_t len);
+
 void arm_machine_restart(char mode, const char *cmd)
 {
 	/*
 	 * Clean and disable cache, and turn off interrupts
 	 */
+
+#if defined (CONFIG_MACH_STAR)
+	unsigned char tmpbuf[2];
+        if (cmd)
+        {
+         strncpy(tmpbuf, cmd, 1);
+        }
+        else
+        {
+          tmpbuf[0] = 'w';
+        }
+
+	switch (tmpbuf[0])
+	{
+		case 'w':
+		break;
+#if defined (CONFIG_STAR_HIDDEN_RESET)
+		case 'h':
+		break;
+#endif
+		case 'p':
+		break;
+		default:
+		tmpbuf[0] ='w';
+		break;
+	}
+	write_cmd_reserved_buffer(tmpbuf,1);
+#endif
+
+//20110124, , fix lockup during reset [START]
+#if defined(CONFIG_MACH_STAR)
+    if ( cmd == NULL )
+	    cpu_proc_fin();
+    else if ( *cmd != 'p' )
 	cpu_proc_fin();
+#else
+	cpu_proc_fin();
+#endif
+//20110124, , fix lockup during reset [END]
 
 	/*
 	 * Tell the mm system that we are going to reboot -
@@ -125,12 +165,13 @@ EXPORT_SYMBOL_GPL(arm_pm_restart);
  * This is our default idle handler.  We need to disable
  * interrupts here to ensure we don't miss a wakeup call.
  */
-static void default_idle(void)
+void default_idle(void)
 {
 	if (!need_resched())
 		arch_idle();
 	local_irq_enable();
 }
+EXPORT_SYMBOL(default_idle);
 
 void (*pm_idle)(void) = default_idle;
 EXPORT_SYMBOL(pm_idle);
@@ -179,6 +220,19 @@ void cpu_idle(void)
 		preempt_disable();
 	}
 }
+
+#if defined(CONFIG_ARCH_HAS_CPU_IDLE_WAIT)
+static void do_nothing(void *unused)
+{
+}
+
+void cpu_idle_wait(void)
+{
+	smp_mb();
+	smp_call_function(do_nothing, NULL, 1);
+}
+#endif
+
 
 static char reboot_mode = 'h';
 
@@ -347,16 +401,17 @@ void show_regs(struct pt_regs * regs)
 	__backtrace();
 }
 
+ATOMIC_NOTIFIER_HEAD(thread_notify_head);
+
+EXPORT_SYMBOL_GPL(thread_notify_head);
+
 /*
  * Free current thread data structures etc..
  */
 void exit_thread(void)
 {
+	thread_notify(THREAD_NOTIFY_EXIT, current_thread_info());
 }
-
-ATOMIC_NOTIFIER_HEAD(thread_notify_head);
-
-EXPORT_SYMBOL_GPL(thread_notify_head);
 
 void flush_thread(void)
 {
@@ -372,9 +427,6 @@ void flush_thread(void)
 
 void release_thread(struct task_struct *dead_task)
 {
-	struct thread_info *thread = task_thread_info(dead_task);
-
-	thread_notify(THREAD_NOTIFY_RELEASE, thread);
 }
 
 asmlinkage void ret_from_fork(void) __asm__("ret_from_fork");

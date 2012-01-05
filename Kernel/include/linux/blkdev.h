@@ -318,7 +318,7 @@ struct queue_limits {
 	unsigned short		max_phys_segments;
 
 	unsigned char		misaligned;
-	unsigned char		no_cluster;
+	unsigned char		cluster;
 };
 
 struct request_queue
@@ -626,6 +626,11 @@ enum {
 #define list_entry_rq(ptr)	list_entry((ptr), struct request, queuelist)
 
 #define rq_data_dir(rq)		((rq)->cmd_flags & 1)
+
+static inline unsigned int blk_queue_cluster(struct request_queue *q)
+{
+        return q->limits.cluster;
+}
 
 /*
  * We regard a request as sync, if either a read or a sync write

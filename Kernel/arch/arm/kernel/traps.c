@@ -229,6 +229,9 @@ static void __die(const char *str, int err, struct thread_info *thread, struct p
 	struct task_struct *tsk = thread->task;
 	static int die_counter;
 
+#if defined(CONFIG_MACH_STAR)
+	set_default_loglevel(); /* 20100916  set default loglevel */
+#endif
 	printk(KERN_EMERG "Internal error: %s: %x [#%d]" S_PREEMPT S_SMP "\n",
 	       str, err, ++die_counter);
 	sysfs_printk_last_file();
@@ -506,9 +509,14 @@ asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 	case NR(set_tls):
 		thread->tp_value = regs->ARM_r0;
 #if defined(CONFIG_HAS_TLS_REG)
+#if defined(CONFIG_TEGRA_ERRATA_657451)
+		BUG_ON(regs->ARM_r0 & 0x1);
+		asm ("mcr p15, 0, %0, c13, c0, 3" : :
+			"r" ((regs->ARM_r0) | ((regs->ARM_r0>>20) & 0x1)));
+#else
 		asm ("mcr p15, 0, %0, c13, c0, 3" : : "r" (regs->ARM_r0) );
-//#elif !defined(CONFIG_TLS_REG_EMUL)
 #endif
+#elif !defined(CONFIG_TLS_REG_EMUL)
 		/*
 		 * User space must never try to access this directly.
 		 * Expect your app to break eventually if you do so.
@@ -516,7 +524,7 @@ asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 		 * (see entry-armv.S for details)
 		 */
 		*((unsigned int *)0xffff0ff0) = regs->ARM_r0;
-//#endif
+#endif
 		return 0;
 
 #ifdef CONFIG_NEEDS_SYSCALL_FOR_CMPXCHG

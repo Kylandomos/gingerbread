@@ -174,7 +174,9 @@ on post-fs
     chown system cache /data/cache
     chmod 0770 /data/cache
 
-    mkdir /cache/download
+    mkdir /data/download
+    symlink /data/download /cache/download
+    chmod 0777 /data/download
     chmod 0777 /cache/download
 
     chown radio radio /efs
